@@ -112,6 +112,27 @@ def is_inter_state_distribution(doc):
     return company_state != party_state or party_gst_category in IMPORT_GST_CATEGORIES
 
 
+@frappe.whitelist()
+def get_company_isd_gstin(company: str):
+    """GSTIN of the first ISD-category address linked to the company (primary address first)."""
+    if not company:
+        return
+
+    addresses = frappe.get_list(
+        "Address",
+        filters=[
+            ["disabled", "=", 0],
+            ["Dynamic Link", "link_doctype", "=", "Company"],
+            ["Dynamic Link", "link_name", "=", company],
+            ["gst_category", "=", ISD_GST_CATEGORY],
+        ],
+        fields=["gstin"],
+        order_by="is_primary_address DESC",
+        limit=1,
+    )
+    return addresses[0].gstin if addresses else None
+
+
 def validate_common_report_filters(filters):
 
     filters = frappe._dict(filters or {})
@@ -239,14 +260,27 @@ def make_isd_invoice(
 
 
 @frappe.whitelist()
-def get_purchase_invoices_distribution_summary(purchase_invoices: list | str):
-    """Per purchase invoice: posting date, supplier, total tax and tax still available to distribute."""
+def get_purchase_invoices_distribution_summary(
+    purchase_invoices: list | str, extra_fields: list | str | None = None
+):
+    """Per purchase invoice: posting date, supplier, total tax and tax still available to distribute.
+
+    extra_fields: optional list of additional Purchase Invoice header columns to select
+    (e.g. company_gstin, base_grand_total). Validated against the doctype's columns since
+    this is a whitelisted endpoint, to prevent field/SQL injection.
+    """
     frappe.has_permission("Purchase Invoice", "read", throw=True)
     if isinstance(purchase_invoices, str):
         purchase_invoices = frappe.parse_json(purchase_invoices)
 
     if not purchase_invoices:
         return []
+
+    if isinstance(extra_fields, str):
+        extra_fields = frappe.parse_json(extra_fields)
+
+    valid_pi_columns = set(frappe.get_meta("Purchase Invoice").get_valid_columns())
+    extra_fields = [f for f in (extra_fields or []) if f in valid_pi_columns]
 
     pi = frappe.qb.DocType("Purchase Invoice")
     pi_item = frappe.qb.DocType("Purchase Invoice Item")
@@ -288,6 +322,7 @@ def get_purchase_invoices_distribution_summary(purchase_invoices: list | str):
             pi.posting_date,
             pi.billing_address,
             pi_item.is_ineligible_for_itc,
+            *[getattr(pi, f) for f in extra_fields],
             *[Coalesce(Sum(getattr(pi_item, f"{t}_amount")), 0).as_(f"total_{t}") for t in GST_TAX_TYPES],
             *[
                 (
