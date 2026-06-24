@@ -17,7 +17,7 @@ import frappe
 from frappe import _
 from frappe.model.meta import get_field_precision
 from frappe.query_builder.functions import Coalesce, Date, IfNull, Sum
-from frappe.utils import add_months, flt, getdate, today
+from frappe.utils import add_months, cint, flt, getdate, today
 
 from india_compliance.gst_india.constants import (
     GST_TAX_TYPES,
@@ -50,33 +50,49 @@ def get_pi_total_tax_map(purchase_invoices):
         .groupby(pi_item.parent)
     )
 
+def _diffuse(cumulative, key, raw_amount, precision):
+    if not raw_amount:
+        return
+    running_raw, running_rounded = cumulative.get(key, (0.0, 0.0))
+    new_raw = running_raw + raw_amount
+    new_rounded = flt(new_raw, precision)
+    cumulative[key] = (new_raw, new_rounded)
+    return flt(new_rounded - running_rounded, precision)
 
-def calculate_distribution(doc, raw_distribution_ratio):
+
+def calculate_distribution(doc, cumulative):
     """Set distributed_* fields on each source_invoices row from its distribution_ratio."""
+    # https://cleartax.in/s/faqs-on-input-service-distributor-under-gst#:~:text=When%20the%20ISD,the%20other%20state.
     sign = -1 if doc.is_credit_note else 1
     inter_state = is_inter_state_distribution(doc)
     precision = get_field_precision(frappe.get_meta("ISD Invoice Source Item").get_field("distributed_igst"))
 
     for row in doc.source_invoices or []:
-        ratio = sign * flt(raw_distribution_ratio) / 100
+        ratio = sign * flt(row.distribution_ratio) / 100
 
-        # inter-state -> all IGST; intra-state -> CGST + SGST (equal halves, since the rates are equal)
-        pool = flt((flt(row.total_cgst) + flt(row.total_sgst) + flt(row.total_igst)) * ratio, precision)
-
+        bucket = (row.purchase_invoice, cint(row.is_ineligible_for_itc))
         if inter_state:
-            row.distributed_igst = pool
+            # inter-state -> IGST credit stays IGST, CGST/SGST credit is distributed as IGST (Rule 39(1)(e), (g))
+            pool = (row.total_igst + row.total_cgst + row.total_sgst) * ratio
+            row.distributed_igst = _diffuse(cumulative, (bucket, "igst"), pool, precision)
             row.distributed_cgst = 0.0
             row.distributed_sgst = 0.0
         else:
-            cgst = flt(pool / 2, precision)
-            sgst = flt(pool / 2, precision)
-            row.distributed_cgst = cgst
-            row.distributed_sgst = sgst
-            row.distributed_igst = 0.0
+            # intra-state -> IGST credit stays IGST, CGST/SGST credit is distributed as CGST/SGST (Rule 39(1)(e), (f))
+            row.distributed_igst = _diffuse(
+                cumulative, (bucket, "igst"), row.total_igst * ratio, precision
+            )
+            row.distributed_cgst = _diffuse(
+                cumulative, (bucket, "cgst"), row.total_cgst * ratio, precision
+            )
+            row.distributed_sgst = _diffuse(
+                cumulative, (bucket, "sgst"), row.total_sgst * ratio, precision
+            )
 
-        row.distributed_cess = flt(flt(row.total_cess) * ratio, precision)
-        row.distributed_cess_non_advol = flt(flt(row.total_cess_non_advol) * ratio, precision)
-
+        row.distributed_cess = _diffuse(cumulative, (bucket, "cess"), row.total_cess * ratio, precision)
+        row.distributed_cess_non_advol = _diffuse(
+            cumulative, (bucket, "cess_non_advol"), row.total_cess * ratio, precision
+        )
 
 def is_inter_state_distribution(doc):
     party_gst_category = (
@@ -199,6 +215,7 @@ def make_isd_invoice(
     individual_turnover: float | None = None,
     total_turnover: float | None = None,
     posting_date: date | None = None,
+    cumulative: dict | None = None,
 ):
     """source_purchase_invoices: list of dicts (from get_purchase_invoices_distribution_summary),
     one per (purchase_invoice, is_ineligible_for_itc), each with:
@@ -253,11 +270,11 @@ def make_isd_invoice(
                 "purchase_invoice": pi.purchase_invoice,
                 "is_ineligible_for_itc": pi.is_ineligible_for_itc,
                 **{f"total_{t}": pi[f"total_{t}"] for t in GST_TAX_TYPES},
-                "distribution_ratio": turnover_ratio * scale * 100,
+                "distribution_ratio": turnover_ratio * scale * 100, #TODO: verify rounding will happen automatically on save
             },
         )
 
-    calculate_distribution(doc, turnover_ratio * scale * 100)
+    calculate_distribution(doc, cumulative)
     doc.set_taxes_and_totals()
     return doc
 
@@ -349,10 +366,6 @@ def get_purchase_invoices_distribution_summary(
         .run(as_dict=True)
     )
 
-    # in case available tax amounts are needed in future
-    # don't blindly do pi's total_{tax_type} - distributed_{tax_type}
-    # you may end up with negative available values
-
     for row in source_purchase_invoices:
         row["total_tax"] = sum(row[f"total_{t}"] for t in GST_TAX_TYPES)
 
@@ -394,27 +407,30 @@ def bulk_create_isd_invoices(
     # drop addresses with no turnover - they would distribute nothing
     distribution_table = [row for row in distribution_table if flt(row["turnover_amount"] or 0)]
 
-    # [{purchase_invoice: ,billing_address: ,is_ineligible_for_itc: , *total_, *available_}]
     source_purchase_invoices = get_purchase_invoices_distribution_summary(purchase_invoices)
 
     total_turnover = sum(flt(row.get("turnover_amount") or 0) for row in distribution_table)
 
-    total_available_for_distribution = flt(0, _tax_precision)
+    available_by_bucket = {
+        (pi.purchase_invoice, cint(pi.is_ineligible_for_itc)): flt(pi.available_tax, _tax_precision)
+        for pi in source_purchase_invoices
+    }
 
     by_billing = defaultdict(list)
     for pi in source_purchase_invoices:
         by_billing[pi.billing_address].append(pi)
 
-        total_available_for_distribution += pi.available_tax
-
     invoice_tasks = []
     for pi_group in by_billing.values():
         for row in distribution_table:
             invoice_tasks.append((pi_group, row))
+    # invoice tasks [(pi with same billing address, addresses with turnover to distribute to)]
 
+    # adjust rounding per (purchase invoice, eligibility) bucket
     invoices, invalid_invoices = [], []
-    total_distributed = flt(0, _tax_precision)
+    distributed = defaultdict(float)
     isd_doc = None
+    cumulative = {}
     for pi_group, row in invoice_tasks:
         isd_doc = make_isd_invoice(
             source_purchase_invoices=pi_group,
@@ -425,6 +441,7 @@ def bulk_create_isd_invoices(
             individual_turnover=flt(row["turnover_amount"]),
             total_turnover=total_turnover,
             posting_date=posting_date,
+            cumulative=cumulative
         )
         is_invalid_invoice = False
         messages_before = len(frappe.message_log)
@@ -440,22 +457,32 @@ def bulk_create_isd_invoices(
         if is_invalid_invoice:
             invalid_invoices.append(isd_doc.name)
         invoices.append(isd_doc.name)
-        total_distributed += sum(sum_row_tax_by_type(src, "distributed") for src in isd_doc.source_invoices)
 
-    if isd_doc and (
-        rounding_difference := flt(total_available_for_distribution - total_distributed, _tax_precision)
-    ):
-        item_to_adjust_rounding = isd_doc.source_invoices[0]
-        valid_distributed_fields = [
-            f"distributed_{t}" for t in GST_TAX_TYPES if item_to_adjust_rounding.get(f"distributed_{t}")
-        ]
-        field = valid_distributed_fields[0] if valid_distributed_fields else f"distributed_{GST_TAX_TYPES[0]}"
-        item_to_adjust_rounding.set(
-            field,
-            flt(item_to_adjust_rounding.get(field) + rounding_difference, _tax_precision),
-        )
-        isd_doc.flags.ignore_validate = True
-        isd_doc.save()
+    #     for src in isd_doc.source_invoices:
+    #         key = (src.purchase_invoice, cint(src.is_ineligible_for_itc))
+    #         distributed[key] += sum_row_tax_by_type(src, "distributed") 
+    #     #store distributed tax per source invoice to distributed {(purchase_invoice, is_ineligible_for_itc): distributed_tax}
+
+    # # settle each bucket's rounding residue on a row of the last invoice (it carries every bucket)
+    # adjusted = False
+    # for src in isd_doc.source_invoices:
+    #     key = (src.purchase_invoice, cint(src.is_ineligible_for_itc))
+    #     residue = flt(available_by_bucket.get(key, 0) - distributed[key], _tax_precision)
+    #     if not residue:
+    #         continue
+
+    #     # divide the residue equally across the row's non-zero tax fields so CGST/SGST stay balanced
+    #     fields = [f"distributed_{t}" for t in GST_TAX_TYPES if src.get(f"distributed_{t}")]
+    #     if not fields:
+    #         continue
+    #     share = flt(residue / len(fields), _tax_precision)
+    #     for field in fields:
+    #         src.set(field, flt(src.get(field) + share, _tax_precision))
+    #     adjusted = True
+
+    # if adjusted:
+    #     isd_doc.flags.ignore_validate = True
+    #     isd_doc.save()
 
     for row in distribution_table:
         frappe.enqueue(
