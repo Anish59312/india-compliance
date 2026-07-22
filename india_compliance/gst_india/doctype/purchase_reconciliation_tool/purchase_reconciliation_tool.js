@@ -29,6 +29,11 @@ const ReturnType = {
     GSTR2B: "GSTR2b",
 };
 
+const RECO_2A_CATEGORIES_KEY = "purchase_reco_2a_categories";
+
+const RECO_MODULE =
+    "india_compliance.gst_india.doctype.purchase_reconciliation_tool.purchase_reconciliation_tool";
+
 function remove_gstr2b_alert(alert) {
     if (alert.length === 0) return;
     $(alert).remove();
@@ -614,6 +619,19 @@ class PurchaseReconciliationTool extends reconciliation.reconciliation_tabs {
                 align: "Left",
             },
             {
+                label: "ITC Availability",
+                fieldname: "itc_availability",
+                width: 120,
+                align: "left",
+            },
+            {
+                label: "IRN",
+                fieldname: "irn_number",
+                width: 80,
+                align: "center",
+                _value: (...args) => get_irn_indicator(args[0], args[2]),
+            },
+            {
                 label: "Action",
                 fieldname: "action",
                 _value: (...args) => {
@@ -703,10 +721,12 @@ class PurchaseReconciliationToolAction {
 
     export_data(selected_row) {
         const data_to_export = this.frm.reconciliation_tabs.get_filtered_data(selected_row);
+        if (!this.frm.reconciliation_tabs.filtered_data?.length) {
+            frappe.throw(__("There is no data to export"));
+        }
         if (selected_row) delete data_to_export.supplier_summary;
 
-        const url =
-            "india_compliance.gst_india.doctype.purchase_reconciliation_tool.purchase_reconciliation_tool.download_excel_report";
+        const url = `${RECO_MODULE}.download_excel_report`;
 
         open_url_post(`/api/method/${url}`, {
             data: JSON.stringify(data_to_export),
@@ -878,12 +898,13 @@ class ImportDialog {
     }
 
     download_gstr_by_category(only_missing) {
-        const marked_gst_categories = GST_CATEGORIES.filter(
-            (category) => this.dialog.fields_dict[category].value === 1,
-        );
+        const marked_gst_categories = this.dialog.get_value("gst_categories") || [];
         if (marked_gst_categories.length === 0) {
             frappe.throw(__("Please select at least one Category to Download"));
         }
+
+        save_2a_categories(marked_gst_categories);
+
         download_gstr(
             this.frm,
             this.date_range,
@@ -1052,35 +1073,33 @@ class ImportDialog {
     }
 
     get_2a_category_fields() {
-        const fields = [];
-        const section_field = {
-            fieldtype: "Section Break",
-            depends_on: "eval:doc.return_type == 'GSTR2a'",
-        };
-
+        const saved = get_saved_2a_categories();
         const import_categories = ["IMPG", "IMPGSEZ"];
         const rare_categories = ["ISD"];
         const overseas_enabled = gst_settings.enable_overseas_transactions;
 
-        fields.push(section_field);
-        GST_CATEGORIES.forEach((category, i) => {
-            let default_check = true;
-            if (rare_categories.includes(category)) default_check = false;
-            else if (import_categories.includes(category) && !overseas_enabled) default_check = false;
+        const is_default_checked = (category) => {
+            if (rare_categories.includes(category)) return false;
+            if (import_categories.includes(category) && !overseas_enabled) return false;
+            return true;
+        };
 
-            fields.push({
-                label: category,
-                fieldname: category,
-                fieldtype: "Check",
-                default: default_check,
-            });
-
-            // after every 4 fields section break
-            if (i % 4 === 3) fields.push({ ...section_field, hide_border: true });
-            else fields.push({ fieldtype: "Column Break" });
-        });
-
-        return fields;
+        return [
+            { fieldtype: "Section Break", depends_on: "eval:doc.return_type == 'GSTR2a'" },
+            {
+                fieldname: "gst_categories",
+                fieldtype: "MultiCheck",
+                label: __("Categories"),
+                select_all: true,
+                columns: 4,
+                sort_options: false,
+                options: GST_CATEGORIES.map((category) => ({
+                    label: category,
+                    value: category,
+                    checked: saved ? saved.includes(category) : is_default_checked(category),
+                })),
+            },
+        ];
     }
 
     get_fields_for_pending_downloads() {
@@ -1139,6 +1158,21 @@ async function download_gstr(
     });
 }
 
+function get_saved_2a_categories() {
+    return india_compliance.get_user_default_json(RECO_2A_CATEGORIES_KEY);
+}
+
+function save_2a_categories(categories) {
+    const serialized = JSON.stringify(categories);
+
+    frappe.defaults.set_user_default_local(RECO_2A_CATEGORIES_KEY, serialized);
+
+    frappe.call({
+        method: `${RECO_MODULE}.set_category_preference`,
+        args: { categories: serialized },
+    });
+}
+
 class EmailDialog {
     constructor(frm, data) {
         this.frm = frm;
@@ -1150,7 +1184,7 @@ class EmailDialog {
         const export_data = this.frm.reconciliation_tabs.get_filtered_data(this.data);
 
         frappe.call({
-            method: "india_compliance.gst_india.doctype.purchase_reconciliation_tool.purchase_reconciliation_tool.generate_excel_attachment",
+            method: `${RECO_MODULE}.generate_excel_attachment`,
             args: {
                 data: JSON.stringify(export_data),
                 doc: JSON.stringify(this.frm.doc),
@@ -1252,6 +1286,12 @@ function get_icon(value, column, data, icon) {
     return `<button class="btn ${icon}" data-name="${hash}">
                 <i class="fa fa-${icon}"></i>
             </button>`;
+}
+
+function get_irn_indicator(value, row) {
+    if (!row.inward_supply_name) return "";
+    const color = value ? "green" : "red";
+    return `<span class="indicator ${color}">${value ? "Yes" : "No"}</span>`;
 }
 
 function get_hash(data) {

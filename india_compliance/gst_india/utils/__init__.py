@@ -1,4 +1,5 @@
 import copy
+import datetime
 import functools
 import io
 import tarfile
@@ -7,10 +8,12 @@ import frappe
 from dateutil import parser
 from erpnext.accounts.party import get_default_contact
 from erpnext.accounts.utils import get_fiscal_year
+from erpnext.stock.get_item_details import purchase_doctypes
 from frappe import _
 from frappe.contacts.doctype.contact.contact import get_contact_details
 from frappe.desk.form.load import get_docinfo, run_onload
 from frappe.utils import (
+    add_months,
     add_to_date,
     cint,
     cstr,
@@ -96,7 +99,12 @@ def send_updated_doc(doc, set_docinfo=False):
 
 
 @frappe.whitelist()
-def get_gstin_list(party: str, party_type: str = "Company", exclude_isd: bool = False):
+def get_gstin_list(
+    party: str,
+    party_type: str = "Company",
+    exclude_isd: bool = False,
+    only_isd: bool = False,
+):
     """
     Returns a list the party's GSTINs.
     """
@@ -108,7 +116,9 @@ def get_gstin_list(party: str, party_type: str = "Company", exclude_isd: bool = 
         "gstin": ("is", "set"),
     }
 
-    if exclude_isd:
+    if only_isd:
+        filters.update({"gst_category": "Input Service Distributor"})
+    elif exclude_isd:
         filters.update({"gst_category": ["!=", "Input Service Distributor"]})
 
     gstin_list = frappe.get_all(
@@ -117,6 +127,10 @@ def get_gstin_list(party: str, party_type: str = "Company", exclude_isd: bool = 
         pluck="gstin",
         distinct=True,
     )
+
+    if only_isd:
+        # default value may not be isd
+        return gstin_list
 
     default_gstin = frappe.db.get_value(party_type, party, "gstin")
     if default_gstin and default_gstin not in gstin_list:
@@ -373,7 +387,7 @@ def is_foreign_transaction(gst_category, place_of_supply):
 
 
 def is_import_of_goods(doc):
-    return doc.gst_category in IMPORT_GST_CATEGORIES and are_goods_supplied(doc)
+    return doc.get("gst_category") in IMPORT_GST_CATEGORIES and are_goods_supplied(doc)
 
 
 def is_import_of_services(doc):
@@ -385,7 +399,11 @@ def is_import_of_services(doc):
     would be collected and discharged by the SEZ Unit / SEZ Developer i.e., under Forward
     Charge Mechanism.
     """
-    return doc.gst_category == "Overseas" and not are_goods_supplied(doc)
+    return doc.get("gst_category") == "Overseas" and not are_goods_supplied(doc)
+
+
+def is_import_transaction(doc):
+    return doc.doctype in purchase_doctypes and (is_import_of_goods(doc) or is_import_of_services(doc))
 
 
 def get_hsn_settings():
@@ -1025,6 +1043,26 @@ def get_period(month_or_quarter, year=None):
     return month_or_quarter_no
 
 
+def get_periods_between_dates(
+    from_date: str | datetime.date | datetime.datetime,
+    to_date: str | datetime.date | datetime.datetime,
+) -> list[str]:
+    """Return inclusive month periods (MMYYYY) between two dates."""
+    from_date = getdate(from_date)
+    to_date = getdate(to_date)
+
+    if from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    periods = []
+    current = from_date
+    while current <= to_date:
+        periods.append(current.strftime("%m%Y"))
+        current = add_months(current, 1)
+
+    return periods
+
+
 def is_outward_stock_entry(doc):
     if (
         doc.doctype == "Stock Entry"
@@ -1115,7 +1153,7 @@ def check_duplicate_party(field: str, value: str, party_type: str, party: str | 
     if party_type not in GST_PARTY_TYPES:
         return
 
-    frappe.has_permission(party_type, doc=party, throw=True)
+    frappe.has_permission(party_type, throw=True)
 
     value = value.upper().strip()
 
@@ -1239,3 +1277,29 @@ def set_ewaybill_status(
 
 def has_gst_taxes(doc):
     return any(row.gst_tax_type in TAX_TYPES for row in doc.taxes)
+
+
+@frappe.whitelist()
+def get_party_for_isd(filters: str):
+    filters = frappe.parse_json(filters)
+
+    doctype = filters.get("doctype")
+    if doctype not in GST_PARTY_TYPES:
+        frappe.throw(
+            frappe._("Invalid doctype {0} for ISD party lookup").format(doctype),
+            frappe.PermissionError,
+        )
+
+    if doctype == "Company":
+        company = filters.get("company")
+        return [company] if company else []
+
+    frappe.has_permission(doctype, "read", throw=True)
+
+    search_text = filters.get("search_text") or ""
+    return frappe.db.get_list(
+        doctype,
+        filters={"name": ("like", f"%{search_text}%")},
+        limit=10,
+        pluck="name",
+    )

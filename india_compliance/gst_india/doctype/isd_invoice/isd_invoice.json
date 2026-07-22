@@ -1,0 +1,452 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2024-01-01 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "company",
+  "column_break_hvps",
+  "posting_date",
+  "column_break_lrzd",
+  "is_credit_note",
+  "credit_note_against",
+  "amended_from",
+  "inter_company_invoice_reference",
+  "against_party_section_1",
+  "is_against_party",
+  "column_break_glsb",
+  "credit_flow",
+  "against_party_section_2",
+  "column_break_euze",
+  "party_type",
+  "column_break_iziu",
+  "party",
+  "section_break_ghby",
+  "is_external_invoice",
+  "column_break_bqao",
+  "external_invoice_number",
+  "accounting_dimensions_section",
+  "cost_center",
+  "dimension_col_break",
+  "project",
+  "source_invoices_section",
+  "get_purchase_invoices",
+  "default_distribution_ratio",
+  "source_invoices",
+  "taxes_section",
+  "taxes",
+  "totals_section",
+  "total_eligible",
+  "column_break_5",
+  "total_ineligible",
+  "column_break_mfrl",
+  "party_account",
+  "expense_account",
+  "address_tab",
+  "address_section",
+  "column_break_upnr",
+  "company_address",
+  "company_gstin",
+  "company_pos",
+  "company_address_display",
+  "column_break_sram",
+  "party_address",
+  "party_gstin",
+  "party_pos",
+  "party_address_display",
+  "additional_info_section",
+  "remarks",
+  "column_break_tngt"
+ ],
+ "fields": [
+  {
+   "bold": 1,
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Series",
+   "no_copy": 1,
+   "options": "ISD-.YY.-",
+   "print_hide": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_credit_note",
+   "fieldtype": "Check",
+   "label": "Is Credit Note"
+  },
+  {
+   "fieldname": "taxes",
+   "fieldtype": "Table",
+   "options": "ISD Invoice Tax Item"
+  },
+  {
+   "fieldname": "column_break_5",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_eligible",
+   "fieldtype": "Currency",
+   "label": "Total Eligible",
+   "no_copy": 1,
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_ineligible",
+   "fieldtype": "Currency",
+   "label": "Total Ineligible",
+   "no_copy": 1,
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "ISD Invoice",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_sram",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "label": "Posting Date",
+   "no_copy": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "fieldname": "column_break_hvps",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_lrzd",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "get_purchase_invoices",
+   "fieldtype": "Button",
+   "label": "Get Purchase Invoices"
+  },
+  {
+   "fieldname": "column_break_mfrl",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval: doc.is_credit_note == 1",
+   "fieldname": "credit_note_against",
+   "fieldtype": "Link",
+   "label": "Credit Note Against",
+   "mandatory_depends_on": "eval: doc.is_credit_note == 1",
+   "options": "ISD Invoice"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "accounting_dimensions_section",
+   "fieldtype": "Section Break",
+   "label": "Accounting Dimensions"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project"
+  },
+  {
+   "depends_on": "eval:doc.is_against_party",
+   "fieldname": "inter_company_invoice_reference",
+   "fieldtype": "Link",
+   "label": "Inter Company Invoice Reference",
+   "options": "ISD Invoice"
+  },
+  {
+   "depends_on": "eval:doc.is_against_party",
+   "fieldname": "party_account",
+   "fieldtype": "Link",
+   "label": "Party Account",
+   "mandatory_depends_on": "eval:doc.is_against_party",
+   "options": "Account"
+  },
+  {
+   "depends_on": "eval:(!doc.party_gstin && !doc.is_against_party)",
+   "fieldname": "expense_account",
+   "fieldtype": "Link",
+   "label": "Expense Account",
+   "mandatory_depends_on": "eval:(!doc.party_gstin && !doc.is_against_party)",
+   "options": "Account"
+  },
+  {
+   "fieldname": "column_break_glsb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_against_party",
+   "fieldtype": "Check",
+   "label": "Issued against Supplier/Customer"
+  },
+  {
+   "fieldname": "company_address",
+   "fieldtype": "Link",
+   "label": "Select Company Address",
+   "options": "Address",
+   "reqd": 1
+  },
+  {
+   "fieldname": "party_address",
+   "fieldtype": "Link",
+   "label": "Select Party Address",
+   "options": "Address",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.is_against_party",
+   "fieldname": "party_type",
+   "fieldtype": "Link",
+   "label": "Party Type",
+   "mandatory_depends_on": "eval:doc.is_against_party",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "party_address_display",
+   "fieldtype": "Text Editor",
+   "label": "Party Address",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_euze",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_iziu",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_upnr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "default_distribution_ratio",
+   "fieldtype": "Float",
+   "label": "Default Distribution Ratio(%)"
+  },
+  {
+   "fieldname": "company_address_display",
+   "fieldtype": "Text Editor",
+   "label": "Company Address",
+   "read_only": 1
+  },
+  {
+   "fieldname": "address_tab",
+   "fieldtype": "Tab Break",
+   "label": "Address"
+  },
+  {
+   "fetch_from": "company_address.gstin",
+   "fieldname": "company_gstin",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Company GSTIN",
+   "read_only": 1
+  },
+  {
+   "fieldname": "company_pos",
+   "fieldtype": "Data",
+   "label": "Company Place of Supply",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "party_address.gstin",
+   "fieldname": "party_gstin",
+   "fieldtype": "Data",
+   "label": "Party GSTIN",
+   "read_only": 1
+  },
+  {
+   "fieldname": "party_pos",
+   "fieldtype": "Data",
+   "label": "Party Place of Supply",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_invoices_section",
+   "fieldtype": "Section Break",
+   "hide_border": 1,
+   "label": "Source Invoices"
+  },
+  {
+   "fieldname": "dimension_col_break",
+   "fieldtype": "Column Break",
+   "is_virtual": 1
+  },
+  {
+   "depends_on": "eval:doc.is_against_party",
+   "fieldname": "party",
+   "fieldtype": "Dynamic Link",
+   "label": "Party",
+   "mandatory_depends_on": "eval:doc.is_against_party",
+   "options": "party_type"
+  },
+  {
+   "fieldname": "source_invoices",
+   "fieldtype": "Table",
+   "options": "ISD Invoice Source Item",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.is_against_party",
+   "fieldname": "credit_flow",
+   "fieldtype": "Select",
+   "label": "Credit Flow",
+   "mandatory_depends_on": "eval:doc.is_against_party",
+   "options": "Credit Distribution\nCredit Receipt"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks",
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "additional_info_section",
+   "fieldtype": "Section Break",
+   "label": "Additional Info"
+  },
+  {
+   "fieldname": "address_section",
+   "fieldtype": "Section Break",
+   "label": "Address"
+  },
+  {
+   "fieldname": "against_party_section_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "against_party_section_2",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "taxes_section",
+   "fieldtype": "Section Break",
+   "label": "Taxes"
+  },
+  {
+   "fieldname": "totals_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_tngt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval: doc.credit_flow == \"Credit Receipt\"",
+   "fieldname": "section_break_ghby",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "0",
+   "description": "write distributed amounts in source invoices\nand leave purchase invoice blank",
+   "fieldname": "is_external_invoice",
+   "fieldtype": "Check",
+   "label": "Is External Invoice"
+  },
+  {
+   "fieldname": "column_break_bqao",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval: doc.is_external_invoice",
+   "fieldname": "external_invoice_number",
+   "fieldtype": "Data",
+   "label": "External Invoice Number",
+   "mandatory_depends_on": "eval: doc.is_external_invoice"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-06-25 16:21:21.852683",
+ "modified_by": "Administrator",
+ "module": "GST India",
+ "name": "ISD Invoice",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Purchase User"
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Auditor"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

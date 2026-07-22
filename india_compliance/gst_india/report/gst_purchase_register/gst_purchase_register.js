@@ -1,22 +1,6 @@
 // Copyright (c) 2024, Resilient Tech and contributors
 // For license information, please see license.txt
-const SUB_SECTION_MAPPING = {
-    4: {
-        "ITC Available": [
-            "Import Of Goods",
-            "Import Of Service",
-            "ITC on Reverse Charge",
-            "Input Service Distributor",
-            "All Other ITC",
-        ],
-        "ITC Reversed": ["As per rules 42 & 43 of CGST Rules and section 17(5)", "Others"],
-        "Ineligible ITC": ["Reclaim of ITC Reversal", "ITC restricted due to PoS rules"],
-    },
-    5: {
-        "Composition Scheme, Exempted, Nil Rated": ["Composition Scheme, Exempted, Nil Rated"],
-        "Non-GST": ["Non-GST"],
-    },
-};
+/* eslint-disable */
 
 const AMOUNT_FIELDS = [
     "taxable_value",
@@ -95,6 +79,9 @@ frappe.query_reports["GST Purchase Register"] = {
             ],
             default: "4",
             reqd: 1,
+            on_change: () => {
+                frappe.query_report.set_filter_value("invoice_sub_category", []);
+            },
         },
         {
             fieldtype: "MultiSelectList",
@@ -127,7 +114,7 @@ frappe.query_reports["GST Purchase Register"] = {
 
 function get_subcategory_options() {
     const sub_section = frappe.query_report.get_filter_value("sub_section");
-    return Object.values(SUB_SECTION_MAPPING[sub_section]).flat();
+    return india_compliance.get_inward_subcategory_options(sub_section);
 }
 
 function custom_report_column_total(...args) {
@@ -137,12 +124,11 @@ function custom_report_column_total(...args) {
     const column_field = args[1].column.fieldname;
     if (!AMOUNT_FIELDS.includes(column_field)) return;
 
-    return this.datamanager.data.reduce((acc, row) => {
+    const { data } = this.datamanager;
+    return this.datamanager.getFilteredRowIndices().reduce((acc, index) => {
+        const row = data[index];
         const value = row[column_field] || 0;
-        if (row.invoice_category === "ITC Reversed") {
-            return acc - value;
-        } else {
-            return acc + value;
-        }
+        if (row.invoice_category === "ITC Reversed") return acc - value;
+        return acc + value;
     }, 0);
 }

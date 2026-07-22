@@ -13,12 +13,6 @@ on:
       codecov_token:
 
   pull_request:
-    paths-ignore:
-      - "**.css"
-      - "**.js"
-      - "**.md"
-      - "**.html"
-      - "**.csv"
 
   push:
     branches:
@@ -31,20 +25,68 @@ on:
         version-16-hotfix,
         version-16,
       ]
-    paths-ignore:
-      - "**.css"
-      - "**.js"
-      - "**.md"
-      - "**.html"
-      - "**.csv"
+
+  workflow_dispatch:
+    inputs:
+      frappe_remote:
+        description: "Frappe remote URL"
+        required: false
+        default: "https://github.com/frappe/frappe.git"
+        type: string
+      frappe_branch:
+        description: "Frappe branch"
+        required: false
+        default: "develop"
+        type: string
+      erpnext_remote:
+        description: "ERPNext remote URL"
+        required: false
+        default: "https://github.com/frappe/erpnext.git"
+        type: string
+      erpnext_branch:
+        description: "ERPNext branch"
+        required: false
+        default: "develop"
+        type: string
+
 env:
   BRANCH: ${{ inputs.base_ref || github.base_ref || github.ref_name }}
   APP_NAME: ${{ inputs.app_name || 'india_compliance' }}
 
+concurrency:
+  group: server-tests-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.number || github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    name: Detect backend changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            backend:
+              - '**'
+              - '!**.css'
+              - '!**.js'
+              - '!**.md'
+              - '!**.html'
+              - '!**.csv'
+
   tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: changes
+    if: ${{ github.event_name != 'pull_request' || needs.changes.outputs.backend == 'true' }}
 
     strategy:
       fail-fast: false
@@ -62,7 +104,7 @@ jobs:
 
     steps:
       - name: Clone
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -116,6 +158,10 @@ jobs:
           bash ${GITHUB_WORKSPACE}/.github/helper/install.sh
         env:
           BRANCH_TO_CLONE: ${{ env.BRANCH }}
+          FRAPPE_REMOTE: ${{ inputs.frappe_remote }}
+          FRAPPE_BRANCH: ${{ inputs.frappe_branch }}
+          ERPNEXT_REMOTE: ${{ inputs.erpnext_remote }}
+          ERPNEXT_BRANCH: ${{ inputs.erpnext_branch }}
 
       - name: Run Tests
         run: cd ~/frappe-bench/ && bench --site test_site run-parallel-tests --app ${{ env.APP_NAME }} --with-coverage
@@ -134,18 +180,18 @@ jobs:
 
   coverage:
     name: Coverage Wrap Up
-    if: github.event_name == 'push'
-    needs: tests
+    if: ${{ github.event_name == 'push' && needs.changes.outputs.backend == 'true' }}
+    needs: [changes, tests]
     runs-on: ubuntu-latest
     steps:
       - name: Clone
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download artifacts
         uses: actions/download-artifact@v8
 
       - name: Upload coverage data
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           name: MariaDB
           fail_ci_if_error: true

@@ -4,7 +4,6 @@
 from enum import Enum
 
 import frappe
-from dateutil.rrule import MONTHLY, rrule
 from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import (
     get_accounting_dimensions,
 )
@@ -15,7 +14,7 @@ from frappe.utils import add_months, cint, format_date, getdate, rounded
 from rapidfuzz import fuzz, process
 
 from india_compliance.gst_india.constants import GST_TAX_TYPES, TAXABLE_GST_TREATMENTS
-from india_compliance.gst_india.utils import get_gstin_list, get_party_for_gstin
+from india_compliance.gst_india.utils import get_gstin_list, get_party_for_gstin, get_periods_between_dates
 from india_compliance.gst_india.utils.gstr_2 import IMPORT_CATEGORY, ReturnType
 from india_compliance.gst_india.utils.itc_claim import (
     SUPPORTED_DOCTYPES,
@@ -1028,6 +1027,13 @@ class ReconciledData(BaseReconciliation):
             "link_doctype",
             "link_name",
             "is_supplier_return_filed",
+            "gstr_1_filled",
+            "gstr_3b_filled",
+            "itc_availability",
+            "reason_itc_unavailability",
+            "irn_source",
+            "irn_number",
+            "irn_gen_date",
         ]
 
         return super().get_all_inward_supply(inward_supply_fields, names, only_names) or []
@@ -1105,6 +1111,13 @@ class ReconciledData(BaseReconciliation):
             "classification": "",
             "is_reverse_charge": "",
             "is_supplier_return_filed": "",
+            "gstr_1_filled": "",
+            "gstr_3b_filled": "",
+            "itc_availability": "",
+            "reason_itc_unavailability": "",
+            "irn_source": "",
+            "irn_number": "",
+            "irn_gen_date": "",
         }
 
         for data in reconciliation_data:
@@ -1148,6 +1161,13 @@ class ReconciledData(BaseReconciliation):
                 "action": inward_supply.get("action"),
                 "classification": inward_supply.get("classification") or self.guess_classification(purchase),
                 "is_supplier_return_filed": inward_supply.is_supplier_return_filed,
+                "gstr_1_filled": inward_supply.get("gstr_1_filled"),
+                "gstr_3b_filled": inward_supply.get("gstr_3b_filled"),
+                "itc_availability": inward_supply.get("itc_availability"),
+                "reason_itc_unavailability": inward_supply.get("reason_itc_unavailability"),
+                "irn_source": inward_supply.get("irn_source"),
+                "irn_number": inward_supply.get("irn_number"),
+                "irn_gen_date": format_date(inward_supply.get("irn_gen_date")),
             }
         )
 
@@ -1329,14 +1349,7 @@ class BaseUtil:
     @staticmethod
     def _get_periods(start_date, end_date):
         """Returns a list of month (formatted as `MMYYYY`) in given date range"""
-
-        if isinstance(start_date, str):
-            start_date = getdate(start_date)
-
-        if isinstance(end_date, str):
-            end_date = getdate(end_date)
-
-        return [dt.strftime("%m%Y") for dt in rrule(MONTHLY, dtstart=start_date, until=end_date)]
+        return get_periods_between_dates(start_date, end_date)
 
     @staticmethod
     def _reversed(lst, reverse):

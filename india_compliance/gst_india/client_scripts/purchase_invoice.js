@@ -67,6 +67,26 @@ frappe.ui.form.on(DOCTYPE, {
                 __("Create"),
             );
         }
+
+        if (
+            frm.doc.docstatus === 1 &&
+            frm.doc.is_isd_applicable &&
+            frappe.model.can_create("ISD Invoice") &&
+            frm.doc.isd_credit_distributed_percent < 100
+        ) {
+            frm.add_custom_button(
+                __("ISD Invoice"),
+                () => {
+                    const pi_context = {
+                        name: frm.doc.name,
+                        posting_date: frm.doc.posting_date,
+                        company: frm.doc.company,
+                    };
+                    india_compliance.show_isd_invoice_distribution_dialog(pi_context);
+                },
+                __("Create"),
+            );
+        }
     },
 
     before_save(frm) {
@@ -75,6 +95,16 @@ frappe.ui.form.on(DOCTYPE, {
     },
 
     on_submit: function (frm) {
+        if (frm.doc.is_isd_applicable && has_goods_items(frm)) {
+            frappe.show_alert(
+                {
+                    message: __("Non-service items found in ISD applicable invoice"),
+                    indicator: "orange",
+                },
+                10,
+            );
+        }
+
         if (!frm._inward_supply) return;
         // go back to previous page and match the invoice with the inward supply
         setTimeout(() => {

@@ -54,11 +54,30 @@ class GSTSettings(Document):
             self.validate_e_invoice_applicability_date()
             self.validate_credentials()
             self.validate_gstin_status_refresh_interval()
+            self.warn_for_nil_exempt_e_invoice_treatment()
 
         self.clear_api_auth_session()
         self.update_retry_e_invoice_e_waybill_scheduled_job()
         self.update_e_invoice_status()
         self.validate_unique_states()
+
+    def warn_for_nil_exempt_e_invoice_treatment(self):
+        if not self.enable_e_invoice:
+            return
+
+        if self.nil_exempt_e_invoice_treatment != "Generate with Taxable Values":
+            return
+
+        if not self.has_value_changed("nil_exempt_e_invoice_treatment"):
+            return
+
+        frappe.msgprint(
+            _(
+                "e-Invoice for Nil / Exempted / Non-GST items will be generated with <b>Taxable Values</b>.<br/><br/>"
+                "Not Recommended: Auto populated in GSTR-1 as Zero-Rated, causing inconsistencies. Use only if required."
+            ),
+            indicator="orange",
+        )
 
     def update_e_invoice_status(self):
         previous_doc = self.get_doc_before_save()
@@ -219,6 +238,10 @@ class GSTSettings(Document):
             self.validate_e_invoice_applicable_companies()
 
     def validate_credentials(self):
+        # Validate credentials only when API/credential-related fields are updated.
+        if not self.should_validate_credentials():
+            return
+
         if not self.enable_api:
             return
 
@@ -258,6 +281,17 @@ class GSTSettings(Document):
                 ),
                 indicator="yellow",
             )
+
+    def should_validate_credentials(self):
+        return any(
+            (
+                self.has_value_changed("enable_api"),
+                self.has_value_changed("enable_e_invoice"),
+                self.has_value_changed("enable_e_waybill"),
+                self.has_value_changed("sandbox_mode"),
+                not self.is_child_table_same("credentials"),
+            )
+        )
 
     def validate_app_key(self, credential):
         if not credential.app_key or len(credential.app_key) != 32:
@@ -475,16 +509,12 @@ def update_pending_status(e_invoice_applicability_date, company=None):
         return
 
     sales_invoice = frappe.qb.DocType("Sales Invoice")
-    sales_invoice_item = frappe.qb.DocType("Sales Invoice Item")
 
     query = (
         frappe.qb.update(sales_invoice)
-        .join(sales_invoice_item)
-        .on(sales_invoice_item.parent == sales_invoice.name)
         .set(sales_invoice.einvoice_status, "Pending")
         .where(IfNull(sales_invoice.billing_address_gstin, "") != IfNull(sales_invoice.company_gstin, ""))
         .where(IfNull(sales_invoice.irn, "") == "")
-        .where(sales_invoice_item.gst_treatment.isin(TAXABLE_GST_TREATMENTS))
         .where(
             (IfNull(sales_invoice.place_of_supply, "") == "96-Other Countries")
             | (IfNull(sales_invoice.billing_address_gstin, "") != "")
@@ -494,6 +524,15 @@ def update_pending_status(e_invoice_applicability_date, company=None):
         .where(IfNull(sales_invoice.company_gstin, "") != "")
         .where(sales_invoice.is_opening != "Yes")
     )
+
+    gst_settings = frappe.get_cached_doc("GST Settings")
+    if gst_settings.nil_exempt_e_invoice_treatment == "Do Not Generate":
+        sales_invoice_item = frappe.qb.DocType("Sales Invoice Item")
+        query = (
+            query.join(sales_invoice_item)
+            .on(sales_invoice_item.parent == sales_invoice.name)
+            .where(sales_invoice_item.gst_treatment.isin(TAXABLE_GST_TREATMENTS))
+        )
 
     if company:
         query = query.where(sales_invoice.company == company)

@@ -9,6 +9,24 @@ import {
     PAN_REGEX,
 } from "./regex_constants";
 
+const INWARD_SECTION_MAPPING = {
+    4: {
+        "ITC Available": [
+            "Import Of Goods",
+            "Import Of Service",
+            "ITC on Reverse Charge",
+            "Input Service Distributor",
+            "All Other ITC",
+        ],
+        "ITC Reversed": ["As per rules 42 & 43 of CGST Rules and section 17(5)", "Others"],
+        "Ineligible ITC": ["Reclaim of ITC Reversal", "ITC restricted due to PoS rules"],
+    },
+    5: {
+        "Composition Scheme, Exempted, Nil Rated": ["Composition Scheme, Exempted, Nil Rated"],
+        "Non-GST": ["Non-GST"],
+    },
+};
+
 frappe.provide("india_compliance");
 
 window.gst_settings = frappe.boot.gst_settings;
@@ -32,6 +50,10 @@ Object.assign(india_compliance, {
     QUARTER: ["Jan-Mar", "Apr-Jun", "Jul-Sep", "Oct-Dec"],
 
     HSN_BIFURCATION_FROM: frappe.datetime.str_to_obj("2025-05-01"),
+
+    GST_TAX_TYPES: ["cgst", "sgst", "igst", "cess", "cess_non_advol"],
+
+    IMPORT_GST_CATEGORIES: ["Overseas", "SEZ"],
 
     get_month_year_from_period(period) {
         /**
@@ -90,7 +112,7 @@ Object.assign(india_compliance, {
         });
     },
 
-    get_gstin_query(party, party_type = "Company", exclude_isd = false) {
+    get_gstin_query(party, party_type = "Company", exclude_isd = false, only_isd = false) {
         if (!party) {
             frappe.show_alert({
                 message: __("Please select {0} to get GSTIN options", [__(party_type)]),
@@ -101,7 +123,7 @@ Object.assign(india_compliance, {
 
         return {
             query: "india_compliance.gst_india.utils.get_gstin_list",
-            params: { party, party_type, exclude_isd },
+            params: { party, party_type, exclude_isd, only_isd },
         };
     },
 
@@ -451,6 +473,17 @@ Object.assign(india_compliance, {
         }, 0);
     },
 
+    get_user_default_json(key) {
+        // Read a user default that stores a JSON value (e.g. a saved list of
+        // download sections/categories). Returns null when unset or malformed.
+        const raw = frappe.defaults.get_user_default(key);
+        try {
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    },
+
     set_last_month_as_default_period(report) {
         report.filters.forEach((filter) => {
             if (filter.fieldname === "from_date") {
@@ -580,6 +613,10 @@ Object.assign(india_compliance, {
         if (!company) return false;
 
         return frappe.boot.indian_registered_companies?.includes(company);
+    },
+
+    get_inward_subcategory_options(sub_section) {
+        return Object.values(INWARD_SECTION_MAPPING[sub_section] || {}).flat();
     },
 });
 

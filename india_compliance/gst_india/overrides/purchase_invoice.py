@@ -14,6 +14,7 @@ from india_compliance.gst_india.overrides.sales_invoice import (
 from india_compliance.gst_india.overrides.transaction import (
     _validate_hsn_codes,
     ignore_gst_validations,
+    sync_address_dependent_fields_on_submit,
     validate_transaction,
 )
 from india_compliance.gst_india.utils import (
@@ -24,10 +25,11 @@ from india_compliance.gst_india.utils import (
     validate_invoice_number,
 )
 from india_compliance.gst_india.utils.e_waybill import get_e_waybill_info
+from india_compliance.gst_india.utils.isd import ISD_GST_CATEGORY
 from india_compliance.gst_india.utils.itc_claim import (
     _is_gstr3b_filed,
     set_or_validate_itc_claim_period,
-    validate_itc_claim_period,
+    validate_itc_claim_period_on_update_after_submit,
 )
 
 
@@ -77,13 +79,16 @@ def validate(doc, method=None):
     set_or_validate_itc_claim_period(doc)
     set_reconciliation_status(doc)
     set_pending_boe_qty(doc)
+    set_is_isd_applicable(doc)
 
 
 def before_update_after_submit(doc, method=None):
+    sync_address_dependent_fields_on_submit(doc)
+
     if ignore_gst_validations(doc):
         return
 
-    validate_itc_claim_period(doc)
+    validate_itc_claim_period_on_update_after_submit(doc)
 
 
 def on_cancel(doc, method=None):
@@ -111,6 +116,17 @@ def set_reconciliation_status(doc):
 def set_pending_boe_qty(doc):
     for item in doc.items:
         item.pending_boe_qty = item.qty if doc.is_boe_applicable else 0
+
+
+def set_is_isd_applicable(doc):
+    doc.is_isd_applicable = 0
+
+    if doc.ineligibility_reason == "ITC restricted due to PoS rules":
+        return
+
+    gst_category = frappe.db.get_value("Address", doc.billing_address, "gst_category")
+    if gst_category == ISD_GST_CATEGORY:
+        doc.is_isd_applicable = 1
 
 
 def set_boe_applicability(doc):
@@ -178,6 +194,7 @@ def get_dashboard_data(data):
         transactions.append(reference_section)
 
     reference_section["items"].append("Bill of Entry")
+    reference_section["items"].append("ISD Invoice")
 
     update_dashboard_with_gst_logs(
         "Purchase Invoice",
@@ -253,7 +270,9 @@ def get_tax_amount(taxes, gst_tax_type):
     if not (taxes or gst_tax_type):
         return 0
 
-    return sum(tax.base_tax_amount_after_discount_amount for tax in taxes if tax.gst_tax_type == gst_tax_type)
+    return sum(
+        flt(tax.base_tax_amount_after_discount_amount) for tax in taxes if tax.gst_tax_type == gst_tax_type
+    )
 
 
 def set_ineligibility_reason(doc, show_alert=True):

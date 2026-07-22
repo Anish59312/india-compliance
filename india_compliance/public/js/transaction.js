@@ -15,10 +15,13 @@ const TRANSACTION_DOCTYPES = [
 
 const SUBCONTRACTING_DOCTYPES = ["Stock Entry", "Subcontracting Order", "Subcontracting Receipt"];
 
+const POST_SUBMIT_GST_FIELDS = ["gst_category", "place_of_supply", "billing_address_gstin", "supplier_gstin"];
+
 for (const doctype of TRANSACTION_DOCTYPES) {
     fetch_gst_details(doctype);
     validate_overseas_gst_category(doctype);
     set_and_validate_gstin_status(doctype);
+    set_gst_tax_breakup_on_load(doctype);
 }
 
 for (const doctype of SUBCONTRACTING_DOCTYPES) {
@@ -153,8 +156,15 @@ india_compliance.fetch_and_update_gst_details = function (frm, args, method) {
         async callback(r) {
             if (!r.message) return;
 
+            let gst_details = r.message;
+            if (frm.doc.docstatus === 1) {
+                gst_details = Object.fromEntries(
+                    Object.entries(gst_details).filter(([field]) => POST_SUBMIT_GST_FIELDS.includes(field)),
+                );
+            }
+
             frm.__updating_gst_details = true;
-            await frm.set_value(r.message);
+            await frm.set_value(gst_details);
             frm.__updating_gst_details = false;
         },
     });
@@ -188,6 +198,15 @@ function ignore_port_code_validation(doctype) {
     frappe.ui.form.on(doctype, {
         onload(frm) {
             frm.set_df_property("port_code", "ignore_validation", 1);
+        },
+    });
+}
+
+function set_gst_tax_breakup_on_load(doctype) {
+    frappe.ui.form.on(doctype, {
+        refresh(frm) {
+            frm.doc.gst_breakup_table = frm.doc.__onload?._gst_breakup_table;
+            frm.refresh_field("gst_breakup_table");
         },
     });
 }
