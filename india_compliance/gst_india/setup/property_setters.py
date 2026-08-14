@@ -1,5 +1,7 @@
 import frappe
 
+from india_compliance.gst_india.constants import INDIAN_STATES
+
 
 def get_property_setters(*, include_defaults=False):
     properties = [
@@ -14,6 +16,12 @@ def get_property_setters(*, include_defaults=False):
             "fieldname": "state",
             "property": "fieldtype",
             "value": "Autocomplete",
+        },
+        {
+            "doctype": "Address",
+            "fieldname": "state",
+            "property": "options",
+            "value": "\n".join(INDIAN_STATES),
         },
         {
             "doctype": "Address",
