@@ -54,7 +54,7 @@ export function fieldInput(scope, fieldname, fieldtype = "Data") {
     return scope.locator(build(fieldname)).first();
 }
 
-async function fillLink(input, value) {
+export async function fillLinkInput(input, value) {
     const term = String(value);
     const dropdown = input.locator("xpath=..").getByRole("listbox");
 
@@ -83,7 +83,7 @@ async function fillLink(input, value) {
 export async function fillField(scope, fieldname, value, fieldtype = "Data") {
     const input = fieldInput(scope, fieldname, fieldtype);
 
-    if (fieldtype === "Link" || fieldtype === "Dynamic Link") return fillLink(input, value);
+    if (fieldtype === "Link" || fieldtype === "Dynamic Link") return fillLinkInput(input, value);
 
     if (fieldtype === "Select") {
         await input.selectOption(String(value));

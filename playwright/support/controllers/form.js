@@ -1,7 +1,7 @@
 import { expect } from "@playwright/test";
 
 import BaseController from "./base";
-import { fieldInput, fillField, newForm, slug, tableField } from "../frappe";
+import { fieldInput, fillField, fillLinkInput, newForm, slug, tableField } from "../frappe";
 
 class Grid {
     constructor(page, fieldname) {
@@ -51,22 +51,33 @@ class Grid {
         return this;
     }
 
-    /** The row must be open for the Link control to exist, so open it first. */
+    /**
+     * Set a Link field in a row through the grid's INLINE cell editor.
+     *
+     * Deliberately not via the expanded row form: that form re-renders while you
+     * type and its first control (Barcode, on Sales Invoice items) steals focus,
+     * so keystrokes end up in the wrong field. Clicking the collapsed cell swaps
+     * its .static-area for a .form-control that owns the awesomplete outright.
+     */
     async setLink(idx, fieldname, value) {
-        await this.openRow(idx);
-        await fillField(this.row(idx), fieldname, value, "Link");
+        await this.cell(idx, fieldname).click();
+
+        const input = this.row(idx)
+            .locator(`[data-fieldname="${fieldname}"] input.form-control:visible`)
+            .first();
+
+        await fillLinkInput(input, value);
 
         return this;
     }
 
     /**
-     * Set a plain (non-Link) field in a row via its inline cell editor. Opens the
-     * row first: on a collapsed row the cell resolves to a read-only .static-area,
-     * which fill() cannot write to.
+     * Set a plain (non-Link) field in a row via the grid's inline cell editor.
+     * Clicking the cell turns its .static-area into an editable .form-control, so
+     * the row does not need expanding -- and expanding it would re-render the
+     * control mid-edit.
      */
     async set(idx, fieldname, value) {
-        await this.openRow(idx);
-
         const cell = this.cell(idx, fieldname);
 
         await cell.click();
@@ -150,6 +161,53 @@ export default class FormController extends BaseController {
         expect(response.status(), `savedocs: ${await response.text()}`).toBe(200);
 
         return this.waitForSettle();
+    }
+
+    async submit() {
+        const saved = this.page.waitForResponse(
+            (response) =>
+                response.url().includes("/api/method/frappe.desk.form.save.savedocs") &&
+                response.request().method() === "POST",
+        );
+
+        await this.page.locator('.page-container:visible button[data-label="Submit"]').first().click();
+
+        await this.page.locator(".modal:visible .btn-modal-primary").first().click();
+
+        const response = await saved;
+        expect(response.status(), `savedocs (submit): ${await response.text()}`).toBe(200);
+
+        await this.docValue((doc) => doc.docstatus, "docstatus should be 1 after submit").toBe(1);
+
+        return this.waitForSettle();
+    }
+
+    /** Assert a scalar field on cur_frm.doc, polling while client scripts settle. */
+    async assertValue(fieldname, expected) {
+        await this.docValue((doc) => doc[fieldname], `${fieldname} should be ${expected}`).toBe(expected);
+
+        return this;
+    }
+
+    /**
+     * The msgprint/validation dialog frappe raises on a failed save. Use for the
+     * cases where the *rejection* is the behaviour under test.
+     */
+    async assertErrorDialog(pattern) {
+        await expect(this.page.locator(".modal:visible .modal-body").first()).toContainText(pattern);
+
+        return this;
+    }
+
+    async dismissDialog() {
+        const modal = this.page.locator(".modal:visible").first();
+
+        if (await modal.count()) {
+            await modal.locator(".modal-header .btn-modal-close, .btn-modal-primary").first().click();
+            await expect(modal).toBeHidden();
+        }
+
+        return this;
     }
 
     async assertStatus(status) {
