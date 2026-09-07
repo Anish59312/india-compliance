@@ -55,7 +55,7 @@ def site():
         frappe.defaults.clear_user_default(key)
 
     frappe.db.set_value("User", USER, "simultaneous_sessions", 10)
-    frappe.db.commit()
+    frappe.db.commit()  # nosemgrep
     frappe.clear_cache()
 
     yield
@@ -133,7 +133,7 @@ def saved_doc(site):
     def fetch(doctype, name):
         # This process runs at REPEATABLE READ, so its snapshot predates whatever
         # the server committed; commit to start a fresh one.
-        frappe.db.commit()
+        frappe.db.commit()  # nosemgrep
         frappe.clear_document_cache(doctype, name)
         tracked.append((doctype, name))
 
@@ -151,4 +151,4 @@ def saved_doc(site):
         except Exception as error:
             print(f"could not clean up {doctype} {name}: {error}")
 
-    frappe.db.commit()
+    frappe.db.commit()  # nosemgrep
