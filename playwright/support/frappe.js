@@ -15,7 +15,7 @@ export async function deskReady(page) {
             return document.body.dataset.ajaxState !== "triggered";
         },
         undefined,
-        { timeout: 30_000 },
+        { timeout: 15_000 },
     );
 
     await expect(page.locator(".layout-main-section:visible").first()).not.toBeEmpty();

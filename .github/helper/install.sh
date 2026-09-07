@@ -83,7 +83,7 @@ bench setup requirements --dev
 wait $wkpid
 
 bench use test_site
-bench start &
+bench start > logs/bench-start.log 2>&1 &
 bench reinstall --yes
 
 bench --verbose install-app india_compliance

@@ -23,17 +23,13 @@ export default defineConfig({
         ? [["github"], ["list"], ["html", { open: "never" }]]
         : [["list"], ["html", { open: "never" }]],
 
-    timeout: 120_000,
-    expect: { timeout: 20_000 },
+    timeout: 30_000,
+    expect: { timeout: 10_000 },
 
     use: {
         baseURL: BASE_URL,
         viewport: VIEWPORT,
-        actionTimeout: 20_000,
-        navigationTimeout: 30_000,
         trace: "on-first-retry",
-        video: "retain-on-failure",
-        screenshot: "only-on-failure",
         ...(process.env.CI
             ? {
                   launchOptions: {
