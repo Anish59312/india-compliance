@@ -17,3 +17,6 @@ node_modules
 /test-results/
 .pytest_cache/
 /ui_tests/.auth/
+
+# Local env — .env.example is the tracked template
+.env

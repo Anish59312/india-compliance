@@ -1,10 +1,10 @@
 import os
-import time
 from pathlib import Path
 
 import frappe
 import pytest
-from playwright.sync_api import Browser, Page, expect
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import Page, Playwright, expect
 
 BENCH_PATH = Path(__file__).parents[3]
 # Rewritten on every run, and left on disk so `playwright codegen --load-storage`
@@ -26,53 +26,6 @@ NOTIFICATION_KEYS = (
 )
 
 expect.set_options(timeout=TIMEOUT)
-
-DESK_SETTLED = """() => {
-    const f = window.frappe;
-    if (!f?.app) return false;
-    if (f.request.ajax_count !== 0) return false;
-
-    return document.body.dataset.ajaxState !== "triggered";
-}"""
-
-DESK_TIMEOUT = 15_000
-
-
-def desk_ready(page: Page) -> None:
-    """The desk's equivalent of wait_for_load_state("networkidle")."""
-    page.wait_for_function(DESK_SETTLED, timeout=DESK_TIMEOUT)
-    expect(page.locator(".layout-main-section:visible").first).not_to_be_empty()
-
-
-def poll_doc(page: Page, pick, matches, message: str, timeout: int = 10_000, interval: int = 250):
-    """Retry a read of cur_frm.doc until `matches` holds.
-
-    Client scripts settle fields asynchronously and expect() cannot poll a JS
-    expression, so a single evaluate() races them.
-    """
-
-    def read():
-        return pick(
-            page.evaluate("() => window.cur_frm ? JSON.parse(JSON.stringify(window.cur_frm.doc)) : {}")
-        )
-
-    deadline = time.monotonic() + timeout / 1000
-    value = read()
-
-    while not matches(value):
-        if time.monotonic() >= deadline:
-            raise AssertionError(f"{message}\n  last value: {value!r}")
-
-        time.sleep(interval / 1000)
-        value = read()
-
-    return value
-
-
-@pytest.hookimpl(tryfirst=True, hookwrapper=True)
-def pytest_runtest_makereport(item, call):
-    outcome = yield
-    setattr(item, f"report_{call.when}", outcome.get_result())
 
 
 @pytest.fixture(scope="session")
@@ -111,25 +64,20 @@ def site():
 
 
 @pytest.fixture(scope="session")
-def storage_state(browser: Browser, base_url: str, site) -> str:
-    context = browser.new_context(base_url=base_url)
+def storage_state(playwright: Playwright, base_url: str, site) -> str:
+    api = playwright.request.new_context(base_url=base_url, fail_on_status_code=True)
 
-    ping = context.request.get("/api/method/ping")
-    if not ping.ok:
-        context.close()
+    try:
+        api.post("/api/method/login", form={"usr": USER, "pwd": PASSWORD})
+        AUTH_STATE.parent.mkdir(parents=True, exist_ok=True)
+        api.storage_state(path=AUTH_STATE)
+    except PlaywrightError as error:
         pytest.fail(
-            f"No Frappe server at {base_url}. Start one with:\n\n"
-            f"    cd {BENCH_PATH} && bench --site {SITE} serve --port {SITE_PORT}\n"
+            f"Could not log in as {USER} at {base_url}: {error}\n\n"
+            f"Is a server running?  bench --site {SITE} serve --port {SITE_PORT}"
         )
-
-    login = context.request.post("/api/method/login", form={"usr": USER, "pwd": PASSWORD})
-    if not login.ok:
-        context.close()
-        pytest.fail(f"login as {USER} failed: {login.text()}")
-
-    AUTH_STATE.parent.mkdir(parents=True, exist_ok=True)
-    context.storage_state(path=str(AUTH_STATE))
-    context.close()
+    finally:
+        api.dispose()
 
     return str(AUTH_STATE)
 
@@ -166,7 +114,7 @@ def page_diagnostics(page: Page, request: pytest.FixtureRequest):
 
     yield lines
 
-    report = getattr(request.node, "report_call", None)
+    report = getattr(request.node, "rep_call", None)
     if lines and (report is None or report.failed):
         print("\n--- browser console ---")
         print("\n".join(lines))
@@ -174,10 +122,6 @@ def page_diagnostics(page: Page, request: pytest.FixtureRequest):
 
 @pytest.fixture
 def authenticated_desk(page: Page) -> Page:
-    """A page logged in and sitting on a settled desk."""
-    page.goto("/app")
-    desk_ready(page)
-
     return page
 
 
@@ -198,6 +142,13 @@ def saved_doc(site):
     yield fetch
 
     for doctype, name in reversed(tracked):
-        frappe.delete_doc(doctype, name, force=True, ignore_permissions=True, delete_permanently=True)
+        try:
+            doc = frappe.get_doc(doctype, name)
+            if doc.docstatus == 1:
+                doc.cancel()
+
+            frappe.delete_doc(doctype, name, force=True, ignore_permissions=True, delete_permanently=True)
+        except Exception as error:
+            print(f"could not clean up {doctype} {name}: {error}")
 
     frappe.db.commit()
