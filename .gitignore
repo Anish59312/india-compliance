@@ -13,9 +13,7 @@ india_compliance/docs/current
 dist/
 node_modules
 
-# Playwright
+# UI tests
 /test-results/
-/playwright-report/
-/blob-report/
-/playwright/.auth/
-/playwright/.cache/
+.pytest_cache/
+/ui_tests/.auth/
