@@ -144,7 +144,7 @@ jobs:
 
       - name: Run UI tests
         working-directory: /home/runner/frappe-bench/apps/india_compliance
-        run: /home/runner/frappe-bench/env/bin/pytest --tracing=retain-on-failure
+        run: /home/runner/frappe-bench/env/bin/pytest
         env:
           SITE: ${{ env.SITE }}
           FRAPPE_SITES_PATH: /home/runner/frappe-bench/sites
@@ -168,7 +168,7 @@ jobs:
           echo "=== frappe.log ==="; tail -n 200 logs/frappe.log || true
           echo "=== worker.error.log ==="; tail -n 100 logs/worker.error.log || true
 
-      - name: Upload traces
+      - name: Upload traces, videos and screenshots
         uses: actions/upload-artifact@v7
         if: failure()
         with:
