@@ -151,6 +151,8 @@ jobs:
           SITE_PORT: ${{ env.UI_PORT }}
           FRAPPE_USER: Administrator
           ADMIN_PASSWORD: admin
+          PY_COLORS: "1"
+          COLUMNS: "160"
 
       - name: Show server logs
         if: ${{ failure() || cancelled() }}

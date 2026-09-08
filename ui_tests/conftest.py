@@ -6,6 +6,8 @@ import pytest
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, Playwright, expect
 
+from ui_tests.pages.form_page import form_page  # noqa: F401
+
 BENCH_PATH = Path(__file__).parents[3]
 # Rewritten on every run, and left on disk so `playwright codegen --load-storage`
 # can open an authenticated recorder.
@@ -126,7 +128,7 @@ def authenticated_desk(page: Page) -> Page:
 
 
 @pytest.fixture
-def saved_doc(site):
+def doc(site):
     """Read a doc the browser just committed, and delete it when the test ends."""
     tracked = []
 

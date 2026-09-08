@@ -1,5 +1,6 @@
 import re
 
+import pytest
 from playwright.sync_api import Locator, Page, expect
 
 from ui_tests.pages.base_page import BasePage
@@ -8,11 +9,23 @@ LINK_FIELDTYPES = ("Link", "Dynamic Link")
 SAVEDOCS = "frappe.desk.form.save.savedocs"
 
 
+@pytest.fixture(autouse=True)
+def form_page(request, authenticated_desk: Page, doc):
+    def open_form(doctype: str, name: str | None = None) -> "FormPage":
+        return FormPage(authenticated_desk, doctype, name, track=doc).navigate()
+
+    if request.instance is not None:
+        request.instance.form_page = open_form
+
+    return open_form
+
+
 class FormPage(BasePage):
-    def __init__(self, page: Page, doctype: str, name: str | None = None):
+    def __init__(self, page: Page, doctype: str, name: str | None = None, track=None):
         super().__init__(page)
         self.doctype = doctype
         self.name = name
+        self.track = track
         self.doctype_slug = doctype.lower().replace(" ", "-")
 
     def navigate(self) -> "FormPage":
@@ -155,6 +168,10 @@ class FormPage(BasePage):
         )
         self.wait_for_load()
         self.name = self.page.evaluate("() => window.cur_frm.doc.name")
+
+        if self.track:
+            #
+            self.track(self.doctype, self.name)
 
         return self
 
