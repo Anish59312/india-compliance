@@ -5,9 +5,6 @@ from playwright.sync_api import Locator, Page, expect
 
 from ui_tests.pages.base_page import BasePage
 
-LINK_FIELDTYPES = ("Link", "Dynamic Link")
-SAVEDOCS = "frappe.desk.form.save.savedocs"
-
 
 @pytest.fixture(autouse=True)
 def form_page(request, authenticated_desk: Page, doc):
@@ -57,7 +54,7 @@ class FormPage(BasePage):
         control = scope.locator(f'[data-fieldname="{fieldname}"][data-fieldtype]:not(.search)')
         fieldtype = control.first.get_attribute("data-fieldtype")
 
-        if fieldtype in LINK_FIELDTYPES:
+        if fieldtype in ("Link", "Dynamic Link"):
             self.set_link(scope, fieldname, str(value))
         elif fieldtype == "Select":
             self.control(scope, fieldname, "select").select_option(str(value))
@@ -157,7 +154,9 @@ class FormPage(BasePage):
 
     def save(self) -> "FormPage":
         with self.page.expect_response(
-            lambda response: SAVEDOCS in response.url and response.request.method == "POST"
+            lambda response: (
+                "frappe.desk.form.save.savedocs" in response.url and response.request.method == "POST"
+            )
         ) as saved:
             self.control_button("Save").click()
 

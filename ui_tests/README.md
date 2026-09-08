@@ -53,7 +53,7 @@ Link dropdowns and child-table grids, saves, and waits for the app to settle aft
 change. Tests call it, never raw locators.
 
 The `form_page` fixture is autouse, so `self.form_page("Purchase Invoice")` gives you an
-open form on a logged-in desk, and anything it saves is deleted when the test ends.
+open form on a logged-in desk.
 
 ```python
 class TestPurchaseInvoice:
@@ -76,6 +76,19 @@ created by hand locally does not exist there, and the test fails with `DoesNotEx
 
 Assert anything a client script computes **before** the save. Move it after, and a server
 hook setting the same field will make a broken client script look fine.
+
+**Every document the test saves is deleted when it ends** — cancelled first if submitted.
+`form.save()` registers the name with the `doc` fixture, which deletes it in teardown, so
+nothing survives the run and nothing to clean up by hand. The browser commits through the
+server, so a rollback is impossible; deletion is the only mechanism. Anything you create
+outside `form.save()` — `frappe.get_doc(...).insert()`, a submit from a dialog — is **not**
+tracked. Pass it through the `doc` fixture yourself:
+
+```python
+def test_something(self, doc):
+    ...
+    doc("Purchase Invoice", name)    # read it, and delete it when the test ends
+```
 
 ## Recording with codegen
 
