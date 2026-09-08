@@ -1,20 +1,8 @@
 import re
 
-import pytest
 from playwright.sync_api import Locator, Page, expect
 
 from ui_tests.pages.base_page import BasePage
-
-
-@pytest.fixture(autouse=True)
-def form_page(request, authenticated_desk: Page, doc):
-    def open_form(doctype: str, name: str | None = None) -> "FormPage":
-        return FormPage(authenticated_desk, doctype, name, track=doc).navigate()
-
-    if request.instance is not None:
-        request.instance.form_page = open_form
-
-    return open_form
 
 
 class FormPage(BasePage):
