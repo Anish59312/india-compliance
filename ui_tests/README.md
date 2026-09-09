@@ -1,7 +1,7 @@
 # UI Tests
 
 Browser tests for the Desk, written with
-[Playwright's Python bindings](https://playwright.dev/python/docs/intro)
+[Playwright&#39;s Python bindings](https://playwright.dev/python/docs/intro)
 and run by `pytest`. `bench run-tests` cannot run them — it is frappe's
 unittest runner and finds no `TestCase`.
 
@@ -18,21 +18,13 @@ playwright install chromium
 
 ## One-time setup
 
-Run the tests against a dedicated test site. We will need to populate this
-site with test data.
+Run the tests against a dedicated test site, and populate it with test data:
 
 ```bash
-bench new-site {site_name} --install-app india_compliance
-
 bench --site {site_name} execute india_compliance.tests.before_tests
 ```
 
-Then start a server for it. `bench start` serves whatever `default_site`
-names, so pin the site if that is not it:
-
-```bash
-bench --site {site_name} serve --port 8001
-```
+If the site should listen on another port, serve it on that port.
 
 ## Configure
 
@@ -48,18 +40,51 @@ cp .env.example .env
 From the app directory, with the server up:
 
 ```bash
-cd <bench>/apps/india_compliance
+cd <bench>/apps/india_compliance/ui_tests
 
 # everything
 pytest
 
-# one test
-pytest -k test_in_state_supplier_gets_cgst_and_sgst
+# a single file
+pytest tests/test_purchase_invoice.py
+
+# a single test
+pytest tests/test_purchase_invoice.py::TestPurchaseInvoice::test_in_state_supplier_gets_cgst_and_sgst
 ```
 
-Add `--headed` to watch the browser. Failures write a trace to
-`test-results/`; open it with
-`playwright show-trace <test-dir>/trace.zip`.
+### Run with a visible browser (headed mode)
+
+The browser is headless by default. Add `--headed` to watch the run in a
+visible window:
+
+```bash
+# everything, in a visible browser
+pytest --headed
+
+# one file, slowed down enough to follow
+pytest --headed --slowmo 500 tests/test_purchase_invoice.py
+```
+
+`--slowmo` takes milliseconds and pauses before each action. To stop on a
+line and step through it in the Playwright Inspector, call `page.pause()`
+inside the test.
+
+### Traces, video and screenshots
+
+`--tracing=retain-on-failure --video=retain-on-failure --screenshot=only-on-failure` are already set in `pyproject.toml`, so a
+failing test leaves its artifacts under `test-results/` and a passing one
+leaves nothing behind. Open a trace in the viewer for a DOM snapshot,
+network log and console output at every step:
+
+```bash
+playwright show-trace test-results/{test-name}/trace.zip
+```
+
+To keep them for passing tests too, override on the command line:
+
+```bash
+pytest --tracing=on --video=on --screenshot=on
+```
 
 ## Writing a test
 
@@ -102,11 +127,11 @@ look fine.
 
 **Every document the test saves is deleted when it ends** — cancelled first
 if submitted. `form.save()` registers the name with the `doc` fixture, which
-deletes it in teardown, so nothing survives the run and nothing to clean up
-by hand. The browser commits through the server, so a rollback is impossible;
-deletion is the only mechanism. Anything you create outside `form.save()` —
-`frappe.get_doc(...).insert()`, a submit from a dialog — is **not** tracked.
-Pass it through the `doc` fixture yourself:
+deletes it in teardown, so nothing survives the run and there is nothing to
+clean up by hand. The browser commits through the server, so a rollback is
+impossible; deletion is the only mechanism. Anything you create outside
+`form.save()` — `frappe.get_doc(...).insert()`, a submit from a dialog — is
+**not** tracked. Pass it through the `doc` fixture yourself:
 
 ```python
 def test_something(self, doc):
@@ -116,22 +141,24 @@ def test_something(self, doc):
 
 ## Recording with codegen
 
-Run these from the app directory, with the env activated. They open two
-windows - a browser and a recorded test file.
+Codegen opens two windows — a browser, and a recorded test file.
+
+```bash
+cd <bench>/apps/india_compliance/ui_tests
+```
 
 **First time** — creates `ui_tests/.auth/admin.json`. Log in as
-Administrator in the window that opens, close it, and the session is written
+Administrator in the window that opens, then close it; the session is written
 to that file:
 
 ```bash
-playwright codegen --save-storage=ui_tests/.auth/admin.json \
+playwright codegen --save-storage=.auth/admin.json \
   "http://{site_name}:8000/login?redirect-to=/app"
 ```
 
-**Every time after** — reads that file and opens straight on an
-authenticated desk:
+**Every time after**
 
 ```bash
-playwright codegen --load-storage=ui_tests/.auth/admin.json \
+playwright codegen --load-storage=.auth/admin.json \
   "http://{site_name}:8000/app"
 ```
