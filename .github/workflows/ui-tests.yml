@@ -157,20 +157,6 @@ jobs:
           PY_COLORS: "1"
           COLUMNS: "160"
 
-      - name: Show server logs
-        if: ${{ failure() || cancelled() }}
-        working-directory: /home/runner/frappe-bench
-        run: |
-          echo "=== Error Log (latest unhandled server exceptions) ==="
-          bench --site "$SITE" execute frappe.client.get_list --kwargs \
-            "{'doctype':'Error Log','fields':['creation','method','reference_doctype'],'limit_page_length':5,'order_by':'creation desc'}" || true
-          echo "=== Error Log (newest traceback) ==="
-          bench --site "$SITE" execute frappe.client.get_list --kwargs \
-            "{'doctype':'Error Log','fields':['error'],'limit_page_length':1,'order_by':'creation desc'}" || true
-          echo "=== bench start (web + worker stdout) ==="; tail -n 300 logs/bench-start.log || true
-          echo "=== frappe.log ==="; tail -n 200 logs/frappe.log || true
-          echo "=== worker.error.log ==="; tail -n 100 logs/worker.error.log || true
-
       - name: Upload traces, videos and screenshots
         uses: actions/upload-artifact@v7
         if: failure()
