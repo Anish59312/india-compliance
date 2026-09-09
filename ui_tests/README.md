@@ -7,9 +7,9 @@ unittest runner and finds no `TestCase`.
 
 ## Install
 
-`bench setup requirements --dev` installs `pytest`, `pytest-playwright` and
-`pytest-timeout` from `pyproject.toml`. It does **not** install a browser —
-pip ships the driver, not the binary. Download it once:
+`bench setup requirements --dev` installs `pytest`, `pytest-playwright`,
+`pytest-timeout` and `python-dotenv` from `pyproject.toml`. It does **not**
+install a browser — pip ships the driver, not the binary. Download it once:
 
 ```bash
 bench setup requirements --dev
@@ -18,18 +18,18 @@ playwright install chromium
 
 ## One-time setup
 
-Run the tests against a dedicated test site, and populate it with test data:
+Run the tests against a dedicated test site, populated with test data:
 
 ```bash
-bench --site {site_name} execute india_compliance.tests.before_tests
+bench --site <site_name> execute india_compliance.tests.before_tests
 ```
 
-If the site should listen on another port, serve it on that port.
+Then serve that site. Any port will do, as long as `.env` agrees.
 
 ## Configure
 
-Copy the example file and set `SITE` and `SITE_PORT` to match that server.
-`conftest.py` loads `.env`, so nothing needs exporting:
+Copy the example file, and set `SITE` and `SITE_PORT` to match the server you
+just started. `conftest.py` loads `.env`, so nothing needs exporting:
 
 ```bash
 cp .env.example .env
@@ -37,7 +37,7 @@ cp .env.example .env
 
 ## Run
 
-From the app directory, with the server up:
+With the server up:
 
 ```bash
 cd <bench>/apps/india_compliance/ui_tests
@@ -65,22 +65,22 @@ pytest --headed
 pytest --headed --slowmo 500 tests/test_purchase_invoice.py
 ```
 
-`--slowmo` takes milliseconds and pauses before each action. To stop on a
-line and step through it in the Playwright Inspector, call `page.pause()`
-inside the test.
+`--slowmo` takes a delay in milliseconds, applied before every action. To
+stop on a line and step through the rest in the Playwright Inspector, call
+`page.pause()` inside the test.
 
 ### Traces, video and screenshots
 
 `--tracing=retain-on-failure --video=retain-on-failure --screenshot=only-on-failure` are already set in `pyproject.toml`, so a
 failing test leaves its artifacts under `test-results/` and a passing one
-leaves nothing behind. Open a trace in the viewer for a DOM snapshot,
-network log and console output at every step:
+leaves nothing behind. Open a trace in the viewer to get a DOM snapshot,
+network log and console output for every step:
 
 ```bash
-playwright show-trace test-results/{test-name}/trace.zip
+playwright show-trace test-results/<test-name>/trace.zip
 ```
 
-To keep them for passing tests too, override on the command line:
+To keep the artifacts for passing tests too, override on the command line:
 
 ```bash
 pytest --tracing=on --video=on --screenshot=on
@@ -88,9 +88,8 @@ pytest --tracing=on --video=on --screenshot=on
 
 ## Writing a test
 
-`FormPage` (`pages/form_page.py`) drives a Desk form: it fills fields by
-fieldname, handles Link dropdowns and child-table grids, saves, and waits for
-the app to settle after every change. Tests call it, never raw locators.
+Wrappers around Playwright locators live in `pages/base_page.py` (`BasePage`,
+the Desk) and `pages/form_page.py` (`FormPage`, one open form).
 
 The `form_page` fixture is autouse, so `self.form_page("Purchase Invoice")`
 gives you an open form on a logged-in desk.
@@ -125,13 +124,10 @@ Assert anything a client script computes **before** the save. Move it after,
 and a server hook setting the same field will make a broken client script
 look fine.
 
-**Every document the test saves is deleted when it ends** — cancelled first
-if submitted. `form.save()` registers the name with the `doc` fixture, which
-deletes it in teardown, so nothing survives the run and there is nothing to
-clean up by hand. The browser commits through the server, so a rollback is
-impossible; deletion is the only mechanism. Anything you create outside
-`form.save()` — `frappe.get_doc(...).insert()`, a submit from a dialog — is
-**not** tracked. Pass it through the `doc` fixture yourself:
+The `doc` fixture reads a document the browser committed and deletes it when
+the test ends, cancelling it first if submitted. `form.save()` registers its
+own saves; pass anything else through it yourself. Cleanup errors are ignored,
+so a submitted invoice with linked GL Entries can survive — a known limitation.
 
 ```python
 def test_something(self, doc):
@@ -141,24 +137,30 @@ def test_something(self, doc):
 
 ## Recording with codegen
 
-Codegen opens two windows — a browser, and a recorded test file.
+Codegen opens two windows — a browser, and an inspector that writes out the
+test as you click. Record from the `ui_tests` directory:
 
 ```bash
 cd <bench>/apps/india_compliance/ui_tests
 ```
 
-**First time** — creates `ui_tests/.auth/admin.json`. Log in as
+**First time** — creates `.auth/admin.json`. Log in as
 Administrator in the window that opens, then close it; the session is written
 to that file:
 
 ```bash
 playwright codegen --save-storage=.auth/admin.json \
-  "http://{site_name}:8000/login?redirect-to=/app"
+  "http://<site_name>:8000/login?redirect-to=/app"
 ```
 
-**Every time after**
+**Every time after** — load that session, and the recorder opens straight on
+an authenticated desk:
 
 ```bash
 playwright codegen --load-storage=.auth/admin.json \
-  "http://{site_name}:8000/app"
+  "http://<site_name>:8000/app"
 ```
+
+What comes out is a draft, not a test — a flat script of raw locators.
+Refactor it onto `BasePage` and `FormPage` before committing: the recorded
+locators break on the next layout change, the page objects do not.
