@@ -163,7 +163,7 @@ class FormPage(BasePage):
         return self
 
     def submit(self) -> "FormPage":
-        self.click_action("Submit")
+        self.control_button("Submit").click()
         self.page.locator(".modal:visible").get_by_role("button", name="Yes").first.click()
         self.wait_for_load()
 

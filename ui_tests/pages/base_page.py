@@ -39,3 +39,16 @@ class BasePage:
 
     def assert_no_modal(self) -> None:
         expect(self.page.locator(".modal:visible")).to_have_count(0)
+
+    def dismiss_modals(self, timeout: int = DESK_TIMEOUT) -> list[str]:
+        """Close every open dialog, newest first, and report their titles."""
+        modals = self.page.locator(".modal:visible")
+        closed: list[str] = []
+
+        while modals.count():
+            modal = modals.last
+            closed.append((modal.locator(".modal-title").first.inner_text() or "").strip())
+            modal.locator(".btn-modal-close").first.click()
+            expect(modal).to_be_hidden(timeout=timeout)
+
+        return closed

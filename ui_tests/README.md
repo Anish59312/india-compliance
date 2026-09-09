@@ -27,11 +27,20 @@ bench new-site {site_name} --install-app india_compliance
 bench --site {site_name} execute india_compliance.tests.before_tests
 ```
 
-Then start the default server. Default port is 8000, but this will work on
-other ports too.
+Then start a server for it. `bench start` serves whatever `default_site`
+names, so pin the site if that is not it:
 
 ```bash
-bench start
+bench --site {site_name} serve --port 8001
+```
+
+## Configure
+
+Copy the example file and set `SITE` and `SITE_PORT` to match that server.
+`conftest.py` loads `.env`, so nothing needs exporting:
+
+```bash
+cp .env.example .env
 ```
 
 ## Run
@@ -42,19 +51,15 @@ From the app directory, with the server up:
 cd <bench>/apps/india_compliance
 
 # everything
-SITE={site_name} SITE_PORT=8000 ../../env/bin/pytest
+pytest
 
 # one test
-SITE={site_name} SITE_PORT=8000 ../../env/bin/pytest \
-  -k test_in_state_supplier_gets_cgst_and_sgst
+pytest -k test_in_state_supplier_gets_cgst_and_sgst
 ```
 
 Add `--headed` to watch the browser. Failures write a trace to
 `test-results/`; open it with
-`../../env/bin/playwright show-trace <test-dir>/trace.zip`.
-
-Put both commands in a `tasks.json` — you will run them dozens of times a
-day, and the `SITE` prefix is easy to forget.
+`playwright show-trace <test-dir>/trace.zip`.
 
 ## Writing a test
 

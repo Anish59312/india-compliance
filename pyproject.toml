@@ -28,6 +28,7 @@ time-machine = "~=3.2.0"
 pytest = "~=9.1"
 pytest-playwright = "~=0.9.0"
 pytest-timeout = "~=2.4"
+python-dotenv = "~=1.2"
 
 [tool.pytest.ini_options]
 testpaths = ["ui_tests"]

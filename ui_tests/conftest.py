@@ -3,12 +3,28 @@ from pathlib import Path
 
 import frappe
 import pytest
+from dotenv import load_dotenv
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, Playwright, expect
 
 from ui_tests.pages.form_page import FormPage
 
 BENCH_PATH = Path(__file__).parents[3]
+ENV_FILE = Path(__file__).parents[1] / ".env"
+
+
+def load_env() -> tuple[str, str, str, str]:
+    """Read `.env` into the environment, overriding anything already exported."""
+    load_dotenv(ENV_FILE, override=True)
+
+    return (
+        os.environ.get("SITE", "test-ui.localhost"),
+        os.environ.get("SITE_PORT", "8000"),
+        os.environ.get("FRAPPE_USER", "Administrator"),
+        os.environ.get("ADMIN_PASSWORD", "admin"),
+    )
+
+
 # Rewritten on every run, and left on disk so `playwright codegen --load-storage`
 # can open an authenticated recorder.
 AUTH_STATE = Path(__file__).parent / ".auth" / "admin.json"
@@ -16,10 +32,7 @@ GSP_URL = "https://asp.resilient.tech/**"
 VIEWPORT = {"width": 1400, "height": 960}
 TIMEOUT = 10_000
 
-SITE = os.environ.get("SITE", "test-ui.localhost")
-SITE_PORT = os.environ.get("SITE_PORT", "8000")
-USER = os.environ.get("FRAPPE_USER", "Administrator")
-PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
+SITE, SITE_PORT, USER, PASSWORD = load_env()
 
 NOTIFICATION_KEYS = (
     "needs_audit_trail_notification",

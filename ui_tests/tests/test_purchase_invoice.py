@@ -38,3 +38,10 @@ class TestPurchaseInvoice:
                 {"account_head": "SGST", "rate": 9},
             ],
         )
+
+        # "Expense Head Changed" sits over the Submit button.
+        form.dismiss_modals()
+
+        form.submit()
+
+        assert form.get_status() == "Unpaid"
