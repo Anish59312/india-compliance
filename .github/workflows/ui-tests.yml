@@ -17,6 +17,9 @@ env:
   BRANCH: ${{ github.base_ref || github.ref_name }}
   SITE: test_site
 
+permissions:
+  contents: read
+
 concurrency:
   group: ui-tests-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.number || github.ref || github.run_id }}
   cancel-in-progress: true
@@ -68,7 +71,7 @@ jobs:
       - name: Clone
         uses: actions/checkout@v7
         with:
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@v7
