@@ -24,16 +24,16 @@ Run the tests against a dedicated test site, populated with test data:
 bench --site <site_name> execute india_compliance.tests.before_tests
 ```
 
-Then serve that site. Any port will do, as long as `.env` agrees.
-
 ## Configure
 
 Copy the example file, and set `SITE` and `SITE_PORT` to match the server you
-just started. `conftest.py` loads `.env`, so nothing needs exporting:
+just started. `conftest.py` loads `.env` directly:
 
 ```bash
 cp .env.example .env
 ```
+
+Edit the configuration in `.env` to match your setup.
 
 ## Run
 
@@ -41,6 +41,7 @@ With the server up:
 
 ```bash
 cd <bench>/apps/india_compliance/ui_tests
+source <bench>/env/bin/activate
 
 # everything
 pytest
@@ -62,7 +63,7 @@ visible window:
 pytest --headed
 
 # one file, slowed down enough to follow
-pytest --headed --slowmo 500 tests/test_purchase_invoice.py
+pytest --headed --slowmo 1000 tests/test_purchase_invoice.py --timeout=0
 ```
 
 `--slowmo` takes a delay in milliseconds, applied before every action. To
@@ -71,10 +72,7 @@ stop on a line and step through the rest in the Playwright Inspector, call
 
 ### Traces, video and screenshots
 
-`--tracing=retain-on-failure --video=retain-on-failure --screenshot=only-on-failure` are already set in `pyproject.toml`, so a
-failing test leaves its artifacts under `test-results/` and a passing one
-leaves nothing behind. Open a trace in the viewer to get a DOM snapshot,
-network log and console output for every step:
+`--tracing=retain-on-failure --video=retain-on-failure --screenshot=only-on-failure` are already set in `pyproject.toml`, so a failing test leaves its artifacts under `test-results/`.
 
 ```bash
 playwright show-trace test-results/<test-name>/trace.zip
