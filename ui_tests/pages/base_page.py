@@ -37,9 +37,6 @@ class BasePage:
         self.page.locator('.es-menu [role="menuitem"]', has_text=name).first.click()
         self.wait_for_load()
 
-    def assert_no_modal(self) -> None:
-        expect(self.page.locator(".modal:visible")).to_have_count(0)
-
     def dismiss_modals(self, timeout: int = DESK_TIMEOUT) -> list[str]:
         """Close every open dialog, newest first, and report their titles."""
         modals = self.page.locator(".modal:visible")
