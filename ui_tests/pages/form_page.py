@@ -106,19 +106,6 @@ class FormPage(BasePage):
             "() => window.cur_frm ? JSON.parse(JSON.stringify(window.cur_frm.doc)) : {}"
         )
 
-    def wait_for_value(self, fieldname: str, value, timeout: int = 10_000):
-        return self.page.wait_for_function(
-            "([field, expected]) => {"
-            " const doc = window.cur_frm?.doc;"
-            " if (!doc) return null;"
-            " const actual = doc[field];"
-            " return String(actual ?? '').includes(String(expected)) ? actual : null;"
-            "}",
-            arg=[fieldname, value],
-            timeout=timeout,
-            polling=100,
-        ).json_value()
-
     def wait_for_row_count(self, tablefield: str, count: int, timeout: int = 10_000) -> None:
         self.page.wait_for_function(
             "([field, expected]) => (window.cur_frm?.doc?.[field] || []).length === expected",
