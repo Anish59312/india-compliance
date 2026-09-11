@@ -14,9 +14,9 @@ dist/
 node_modules
 
 # UI tests
-/test-results/
+test-results/
 .pytest_cache/
-/ui_tests/.auth/
+.auth/
 
 # Local env — .env.example is the tracked template
 .env
