@@ -15,7 +15,7 @@ ENV_FILE = Path(__file__).parents[1] / ".env"
 
 def load_env() -> tuple[str, str, str, str]:
     """Read `.env` into the environment, overriding anything already exported."""
-    load_dotenv(ENV_FILE, override=True)
+    load_dotenv(ENV_FILE)
 
     return (
         os.environ.get("SITE", "test-ui.localhost"),
@@ -63,6 +63,13 @@ def site():
     os.environ.setdefault("FRAPPE_STREAM_LOGGING", "1")
 
     frappe.init(SITE, sites_path=sites_path)
+
+    if not (frappe.conf.allow_tests or os.environ.get("CI")):
+        pytest.fail(
+            f"Testing is disabled for {SITE}. Enable it with:\n"
+            f"    bench --site {SITE} set-config allow_tests true"
+        )
+
     frappe.connect()
 
     for key in NOTIFICATION_KEYS:

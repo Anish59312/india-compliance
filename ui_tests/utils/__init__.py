@@ -11,10 +11,10 @@ def dismiss_modals(form, timeout: int = DESK_TIMEOUT) -> list[str]:
     modals = form.get_modals()
     closed: list[str] = []
 
-    while modals.count():
+    while count := modals.count():
         modal = modals.last
         closed.append((modal.locator(".modal-title").first.inner_text() or "").strip())
         modal.locator(".btn-modal-close").first.click()
-        modal.wait_for(state="hidden", timeout=timeout)
+        expect(modals).to_have_count(count - 1, timeout=timeout)
 
     return closed
