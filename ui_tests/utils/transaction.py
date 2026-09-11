@@ -1,3 +1,10 @@
+from ui_tests.utils import wait_for_input_value
+
+
+def verify_field_value(form, fieldname, expected):
+    wait_for_input_value(form.control(form.page, fieldname, "input"), str(expected))
+
+
 def verify_autofill_attributes(form, fieldname, value):
     form.wait_for_value(fieldname, value)
 

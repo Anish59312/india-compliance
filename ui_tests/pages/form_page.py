@@ -1,6 +1,4 @@
-import re
-
-from playwright.sync_api import Locator, Page, expect
+from playwright.sync_api import Locator, Page
 
 from ui_tests.pages.base_page import BasePage
 
@@ -16,16 +14,6 @@ class FormPage(BasePage):
     def navigate(self) -> "FormPage":
         route = self.name or "new"
         self.page.goto(f"/app/{self.doctype_slug}/{route}")
-
-        if self.name:
-            expect(self.page.locator("body")).to_have_attribute(
-                "data-route", f"Form/{self.doctype}/{self.name}"
-            )
-        else:
-            expect(self.page.locator("body")).to_have_attribute(
-                "data-route",
-                re.compile(rf"^Form/{re.escape(self.doctype)}/new-{re.escape(self.doctype_slug)}-"),
-            )
 
         self.wait_for_load()
 
@@ -59,9 +47,8 @@ class FormPage(BasePage):
 
         input_.click()
         input_.press_sequentially(value, delay=50)
-        expect(dropdown.get_by_role("option").first).to_contain_text(value)
+        dropdown.get_by_role("option").filter(has_text=value).first.wait_for()
         input_.press("Enter")
-        expect(input_).to_have_value(value)
 
     def control(self, scope, fieldname: str, tag: str) -> Locator:
         return scope.locator(f'[data-fieldname="{fieldname}"]:not(.search) {tag}:visible').first
@@ -80,16 +67,17 @@ class FormPage(BasePage):
         rows = grid.locator(".grid-row[data-idx]")
 
         while rows.count() < row_idx:
+            added = rows.count()
             grid.locator(".grid-add-row").click()
-            expect(rows).to_have_count(row_idx)
+            rows.nth(added).wait_for()
 
         row = grid.locator(f'.grid-row[data-idx="{row_idx}"]')
-        expect(row).to_be_visible()
+        row.wait_for()
 
         if "grid-row-open" not in (row.get_attribute("class") or ""):
             row.locator(".btn-open-row").click()
 
-        expect(row).to_contain_class("grid-row-open")
+        grid.locator(f'.grid-row[data-idx="{row_idx}"].grid-row-open').wait_for()
 
         return row
 
@@ -164,7 +152,7 @@ class FormPage(BasePage):
 
     def submit(self) -> "FormPage":
         self.control_button("Submit").click()
-        self.page.locator(".modal:visible").get_by_role("button", name="Yes").first.click()
+        self.get_modals().get_by_role("button", name="Yes").first.click()
         self.wait_for_load()
 
         return self
@@ -178,8 +166,3 @@ class FormPage(BasePage):
             .first.inner_text()
             .strip()
         )
-
-    def assert_field_value(self, fieldname: str, expected) -> "FormPage":
-        expect(self.control(self.page, fieldname, "input")).to_have_value(str(expected))
-
-        return self

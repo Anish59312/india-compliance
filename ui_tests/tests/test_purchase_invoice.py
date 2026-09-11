@@ -1,6 +1,7 @@
 import frappe
 import pytest
 
+from ui_tests.utils import dismiss_modals
 from ui_tests.utils.transaction import (
     fill_items_table,
     verify_autofill_attributes,
@@ -40,7 +41,7 @@ class TestPurchaseInvoice:
         )
 
         # "Expense Head Changed" sits over the Submit button.
-        form.dismiss_modals()
+        dismiss_modals(form)
 
         form.submit()
 

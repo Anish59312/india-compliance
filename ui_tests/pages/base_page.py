@@ -1,4 +1,4 @@
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Locator, Page
 
 DESK_SETTLED = """() => {
     const f = window.frappe;
@@ -17,7 +17,7 @@ class BasePage:
 
     def wait_for_load(self, timeout: int = DESK_TIMEOUT) -> None:
         self.page.wait_for_function(DESK_SETTLED, timeout=timeout, polling=100)
-        expect(self.page.locator(".layout-main-section:visible").first).not_to_be_empty()
+        self.page.locator(".layout-main-section:visible > *:visible").first.wait_for(timeout=timeout)
 
     def reload(self) -> None:
         self.page.reload()
@@ -37,15 +37,5 @@ class BasePage:
         self.page.locator('.es-menu [role="menuitem"]', has_text=name).first.click()
         self.wait_for_load()
 
-    def dismiss_modals(self, timeout: int = DESK_TIMEOUT) -> list[str]:
-        """Close every open dialog, newest first, and report their titles."""
-        modals = self.page.locator(".modal:visible")
-        closed: list[str] = []
-
-        while modals.count():
-            modal = modals.last
-            closed.append((modal.locator(".modal-title").first.inner_text() or "").strip())
-            modal.locator(".btn-modal-close").first.click()
-            expect(modal).to_be_hidden(timeout=timeout)
-
-        return closed
+    def get_modals(self) -> Locator:
+        return self.page.locator(".modal:visible")
