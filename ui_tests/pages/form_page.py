@@ -39,7 +39,9 @@ class FormPage(BasePage):
             if bool(value) != checkbox.is_checked():
                 checkbox.set_checked(bool(value))
         else:
-            self.control(scope, fieldname, "input").fill(str(value))
+            input_ = self.control(scope, fieldname, "input")
+            input_.fill(str(value))
+            input_.blur()
 
     def set_link(self, scope, fieldname: str, value: str) -> None:
         input_ = self.control(scope, fieldname, "input")
