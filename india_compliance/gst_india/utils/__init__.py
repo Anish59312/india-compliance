@@ -43,6 +43,7 @@ from india_compliance.gst_india.constants import (
     GST_PARTY_TYPES,
     GSTIN_FORMATS,
     IMPORT_GST_CATEGORIES,
+    OIDAR,
     PAN_NUMBER,
     PINCODE_FORMAT,
     SALES_DOCTYPES,
@@ -264,14 +265,14 @@ def get_party_for_gstin(gstin: str, party_type: str = "Supplier"):
         return party[0][0]
 
 
-def validate_company_access(company, doctype="GST Inward Supply"):
+def validate_company_access(company, doctype="GST Inward Supply", perm="read"):
     """Throw unless the user may read doctype data for company."""
     if not company:
         return
 
     reference = frappe.new_doc(doctype)
     reference.company = company
-    if not frappe.has_permission(doctype, "read", doc=reference):
+    if not frappe.has_permission(doctype, perm, doc=reference):
         frappe.throw(
             _("You are not permitted to access data for Company {0}.").format(company),
             frappe.PermissionError,
@@ -420,6 +421,14 @@ def is_valid_pan(pan):
     return PAN_NUMBER.match(pan)
 
 
+def is_oidar_gstin(gstin):
+    return OIDAR.match(gstin)
+
+
+def get_pan_from_gstin(gstin):
+    return pan if is_valid_pan(pan := gstin[2:12]) else ""
+
+
 def validate_pincode(address):
     """
     Validate Pincode with following checks:
@@ -498,6 +507,9 @@ def guess_gst_category(gstin: str | None, country: str | None, gst_category: str
 
     if GSTIN_FORMATS["UIN Holders"].match(gstin):
         return "UIN Holders"
+
+    if is_oidar_gstin(gstin):
+        return "Overseas"
 
     if GSTIN_FORMATS["Overseas"].match(gstin):
         return "Overseas"

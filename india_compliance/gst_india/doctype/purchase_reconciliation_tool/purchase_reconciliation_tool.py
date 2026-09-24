@@ -27,6 +27,9 @@ from india_compliance.gst_india.doctype.purchase_reconciliation_tool import (
     Reconciler,
 )
 from india_compliance.gst_india.doctype.purchase_reconciliation_tool.purchase_reconciliation_utils import (
+    copy_details as _copy_details,
+)
+from india_compliance.gst_india.doctype.purchase_reconciliation_tool.purchase_reconciliation_utils import (
     get_formatted_options,
     set_reconciliation_status,
 )
@@ -278,6 +281,19 @@ class PurchaseReconciliationTool(Document):
         frappe.has_permission("Purchase Reconciliation Tool", "write", throw=True)
 
         purchases, inward_supplies = _unlink_documents(data, exclude_from_reconciliation)
+
+        return self.ReconciledData.get(purchases, inward_supplies)
+
+    @frappe.whitelist()
+    def copy_details(self, data: str | list, fields: str | list | None = None):
+        frappe.has_permission("Purchase Reconciliation Tool", "write", throw=True)
+
+        copied = _copy_details(data, fields, tool=self.doctype)
+
+        if not copied:
+            return
+
+        purchases, inward_supplies = copied
 
         return self.ReconciledData.get(purchases, inward_supplies)
 
@@ -1356,6 +1372,18 @@ class BuildExcel:
                     "bg_color": self.COLOR_PALLATE.dark_pink,
                     "width": 25,
                 },
+            },
+            {
+                "label": "GSTR-2B Period",
+                "fieldname": "return_period_2b",
+                "data_format": {"horizontal": "center"},
+                "header_format": {"width": 15},
+            },
+            {
+                "label": "ITC Claim Period (Books)",
+                "fieldname": "itc_claim_period",
+                "data_format": {"horizontal": "center"},
+                "header_format": {"width": 15},
             },
             {
                 "label": "ITC Availability",
